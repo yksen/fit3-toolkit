@@ -1,7 +1,7 @@
 # File service over Bluetooth (RFCOMM)
 
 The watch exposes a serial service (SPP, UUID `db764ac8-4b08-7f25-aafe-59d03c27bae3`, RFCOMM channel 29, 115200 baud nominal). Stock firmware accepts a
-connection only on the setup screen after a reset; the "spp" patch ([firmware.md](firmware.md)) makes it always visible and lets a second client connect.
+connection only on the setup screen after a reset; the "spp" patch ([firmware.md](firmware.md)) makes it always connectable (not visible in scans: you need its address, see [howto.md](howto.md)) and lets a second client connect.
 After that patch a Linux PC can open `socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM)` to channel 29 **without pairing**. Anyone in range can, too.
 
 Messages are plain ASCII commands, no terminator. The protocol is that of the community flashers (see the credits in [legal.md](legal.md)); everything below was seen on a real watch unless noted.

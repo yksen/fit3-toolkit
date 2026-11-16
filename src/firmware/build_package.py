@@ -7,7 +7,7 @@
 (`src/build_firmware.py` compiles the loader and calls this: use that unless you write your own loader.)
 
 What it changes (every old byte is checked first; nothing is written when something is not as expected):
-  1. Bluetooth patches: 0x2c233820 `mov r4,r0` -> `movs r4,#3` (the watch is always visible and connectable),
+  1. Bluetooth patches: 0x2c233820 `mov r4,r0` -> `movs r4,#2` (the watch is always connectable, but not visible in scans; mode 3, "visible and connectable", stopped Galaxy Wearable from installing watch faces: it stalled at 50 %, issue #1),
      0x2c227f7a `mov r1,r2` -> `movs r1,#1` (RFCOMM channel 29 accepts a second client). They let this PC flash the watch, and let ANYONE in range connect without pairing:
      --no-bluetooth-patches leaves them out (flash such a package last, see docs/howto.md).
   2. the loader: the bytes of --loader go to --loader-addr (default 0x2c3a0524) in the free flash. Stock has zeros from 0x2c3a0524 to 0x2c3af920 (62460 bytes); the range is checked.
@@ -30,7 +30,7 @@ at = lambda vma: vma - BASE
 FREE_START, FREE_END = 0x2c3a0524, 0x2c3af920          # zeros in the stock image (checked at build time)
 SPP_PATCHES = [  # (vma, stock bytes, new bytes)
     (0x2c227f7a, bytes.fromhex("1146"), bytes.fromhex("0121")),
-    (0x2c233820, bytes.fromhex("0446"), bytes.fromhex("0324")),
+    (0x2c233820, bytes.fromhex("0446"), bytes.fromhex("0224")),
 ]
 ICON_SIZE = 64 * 64 * 3                                       # body of a 64 x 64 LV_IMG_CF_TRUE_COLOR_ALPHA image, 16-bit colour: RGB565 LE + alpha (src/assets/mkicon.py)
 APPLIST_TABLE, APPLIST_ROWS = 0x2c30021c, 12                 # flash template of the app-list rows, 12 bytes each: u8 kind, pad, s16 window id, char* icon id string, u16 text id, pad

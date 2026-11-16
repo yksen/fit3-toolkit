@@ -23,7 +23,7 @@ side (packages with changed main images boot), which we have not proven.
 
 | Where | What |
 |---|---|
-| `0x2c233820` | `mov r4,r0` -> `movs r4,#3`: Bluetooth access mode always "visible and connectable" |
+| `0x2c233820` | `mov r4,r0` -> `movs r4,#2`: Bluetooth access mode always "connectable" (page scan), not "visible". Mode 3 (visible and connectable, what the first versions forced) made Galaxy Wearable stall at 50 % when installing a watch face (issue #1); with mode 2 and the other patch the face installs. |
 | `0x2c227f7a` | `mov r1,r2` -> `movs r1,#1`: RFCOMM channel 29 accepts a connection although another client uses it |
 | `0x2c3a0524...` | our code, then the icon: the stock image has **62,460 bytes of zeros** here (`0x2c3a0524..0x2c3af920`) |
 | the entry of two window functions | `b.w` into our code (create and window event of the replaced app-list entry); the other functions of its window record become `bx lr` (see [details.md](details.md), section 2) |

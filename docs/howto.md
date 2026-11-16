@@ -48,7 +48,7 @@ watch: [replies.md](replies.md).
 No phone app needed. The protocol is in [protocol.md](protocol.md); each stage is a separate command:
 
 ```
-export F3_ADDR=AA:BB:CC:DD:EE:FF                                              # your watch's Bluetooth address (its name is "Galaxy Fit3 (xxxx)")
+export F3_ADDR=AA:BB:CC:DD:EE:FF                                              # your watch's Bluetooth address (its name is "Galaxy Fit3 (xxxx)"); where to find it: see below
 python3 -I src/device/f3_flash.py out.bin                                     # plan: checks the package on the PC, touches nothing
 python3 -I src/device/f3_flash.py out.bin --upload --verify                   # copies it to the watch, checks the size, reads it all back; installs nothing
 python3 -I src/device/f3_flash.py out.bin --upload --verify --start-update    # also starts the installation (you type FLASH); it cannot be cancelled
@@ -56,7 +56,7 @@ python3 -I src/device/f3_flash.py out.bin --upload --verify --start-update    # 
 
 - The package must pass `validate_fwd.py` or nothing is sent. Without `--start-update` nothing is installed, so an interrupted upload is harmless: run it again.
 - `--verify` reads the whole file back and compares it: the only check that the *content* arrived intact (without it only the length is checked). It takes about 17 minutes against 2 for the upload.
-- The watch must be visible, Samsung's Galaxy Wearable app closed on the phone (one client at a time), and it must already carry our Bluetooth patches (any package built here has them by default). Do not touch the
+- The watch must be in range and connectable (with our patches it is always connectable but **not visible in scans, so you must give its address**; see "Your watch's Bluetooth address" below), Samsung's Galaxy Wearable app closed on the phone (one client at a time), and it must already carry our Bluetooth patches (any package built here has them by default). Do not touch the
   watch during the installation.
 - A time-stamped log of the protocol events (never the package's bytes) goes to `local/logs/f3_flash-<time>.log`; `--log PATH` and `--no-log` change that.
 
@@ -73,10 +73,14 @@ python3 -I src/device/f3x_install.py remove --slot 3                            
 
 The format, how to write an app and the limits: [f3x.md](f3x.md).
 
+### Your watch's Bluetooth address
+
+With our patches the watch does not show up in a scan, so look the address up once. The watch is visible on the setup screen after a factory reset: run `bluetoothctl scan on` and note the address of "Galaxy Fit3 (xxxx)" (`bluetoothctl devices`). Once the watch has been paired with the PC, `bluetoothctl devices Paired` lists it. On the phone, the paired-devices list in Android's Bluetooth settings (the gear next to the watch) may show the address too; we have not checked what each version of Android shows.
+
 ## 4. The Bluetooth patches, and closing the door when you are done
 
-Every package built here carries two one-instruction **Bluetooth patches** ([firmware.md](firmware.md)). They let this PC flash the watch, and they have a price: the watch is **always visible and
-connectable, and its file service accepts a connection without pairing from anyone in range**. It can read files and write `/user` files and a firmware package, and we saw no signature check on the firmware
+Every package built here carries two one-instruction **Bluetooth patches** ([firmware.md](firmware.md)). They let this PC flash the watch, and they have a price: the watch is **always
+connectable (not visible in scans), and its file service accepts a connection without pairing from anyone in range**. It can read files and write `/user` files and a firmware package, and we saw no signature check on the firmware
 (only CRCs). Treat a watch with these patches as open to anyone near it.
 
 When you are finished, build the **final package without them** and flash it last: `python3 -I src/build_firmware.py stock-aza3.bin final.bin --hub none --no-bluetooth-patches`. The watch then behaves as from the

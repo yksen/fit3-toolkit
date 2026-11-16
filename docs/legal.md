@@ -7,8 +7,8 @@ What the [README](../README.md) does not say: the details of the disclaimer, the
 Galaxy Fit3 and Samsung are trademarks of their owners; the authors credited in the README do not endorse this project either.
 
 A package that boots on one watch may not boot on another: everything here was tried on one watch, one model (SM-R390), one firmware version (R390XXU0AZA3). Recovery from a bad flash may be impossible.
-Apps are native code with no sandbox: a faulty app can restart the watch, and an app can read and write the watch's files. The Bluetooth patches leave the watch visible and its file service open to
-anyone in range. Flashing may void your warranty. You use all of this at your own risk; there is no warranty.
+Apps are native code with no sandbox: a faulty app can restart the watch, and an app can read and write the watch's files. The Bluetooth patches leave the watch always connectable and its file service open to
+anyone in range who knows its address. Flashing may void your warranty. You use all of this at your own risk; there is no warranty.
 
 ## AI-written parts
 
