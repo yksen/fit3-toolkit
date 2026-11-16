@@ -108,6 +108,8 @@ docs/
 
 Every directory under `src/` has its own README.
 
+Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## How it works
 
 The firmware calls two functions of each window of its app list through a table. The build puts a branch at the start of those two functions of the chosen entry, into our code in an empty area of the
