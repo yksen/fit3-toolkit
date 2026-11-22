@@ -6,7 +6,7 @@ All firmware addresses used are in `docs/symbols.csv`.
 
 | File | What it is |
 |---|---|
-| `hub.c` | the window that replaces one entry of the app list: **single-app mode** (one app owns the window) or the **Application Hub** (a native-style list; a tap opens an app, the back gesture closes it). The window manager's answers (key policy, swipe queries) and the back gesture live here, once, for every app. |
+| `hub.c` | the window that replaces one entry of the app list: **single-app mode** (`--app`: one app owns the window) or the **Application Hub** (the default) (a native-style list; a tap opens an app, the back gesture closes it). The window manager's answers (key policy, swipe queries) and the back gesture live here, once, for every app. |
 | `ui.h` | what the code shares: the firmware functions we call, colours, fonts, text helpers, small file helpers (`blob_save`/`blob_load`), widgets (`mk_box`, `mk_text`, `mk_pill`), and the `App` interface. |
 | `kblang.py` | the keyboard layouts of the reply keyboard per system language (`--kb-lang`), and the header they become. |
 | `kbd.c` | the reply keyboard and its hook (included when `--reply-keyboard` is given; [docs/replies.md](../../docs/replies.md)). |
@@ -25,8 +25,9 @@ the app closes. A long press on the row of an **installed** app opens a sheet th
 ## Build modes
 
 ```
-python3 -I src/build_firmware.py <stock.bin> <out.bin> --app tennis                 # one app owns the window (default)
-python3 -I src/build_firmware.py <stock.bin> <out.bin> --hub tennis,counter,dice    # the Application Hub; the list follows the order given
+python3 -I src/build_firmware.py <stock.bin> <out.bin>                              # the Application Hub with no apps built in (default; apps are installed as .f3x)
+python3 -I src/build_firmware.py <stock.bin> <out.bin> --hub tennis,counter,dice    # the hub with these apps built in too; the list follows the order given
+python3 -I src/build_firmware.py <stock.bin> <out.bin> --app tennis                 # no hub: one app owns the window
 ```
 
 The build prints how much of the free flash it used (the numbers are printed, not promised here: they change with every app). Each app adds its code plus its 64 x 64 four-bit icon, 2,112 bytes.

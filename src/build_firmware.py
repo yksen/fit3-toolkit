@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """build_firmware.py: one command from *your* stock firmware package to a package that has our watch code in place of World clock (or another app-list entry).
 
-    python3 -I src/build_firmware.py <stock R390XXU0AZA3 package.bin> <out.bin> [--app tennis | --hub tennis,counter,dice [--no-install]] [--slot "World Clock"] [--label "..."] [--languages en|all] [--no-icon] [--no-bluetooth-patches] [--reply-keyboard [--kb-lang en,pl,pt | all] [--kb-font Roboto-Medium.ttf]] | --list-slots
+    python3 -I src/build_firmware.py <stock R390XXU0AZA3 package.bin> <out.bin> [--hub tennis,counter,dice [--no-install] | --app tennis] [--slot "World Clock"] [--label "..."] [--languages en|all] [--no-icon] [--no-bluetooth-patches] [--reply-keyboard [--kb-lang en,pl,pt | all] [--kb-font Roboto-Medium.ttf]] | --list-slots
 
-`--app NAME` makes the entry that one app (default: tennis); `--hub A,B,C` makes it the Application Hub, a native-style list that opens the apps (src/watch/README.md; apps: tennis, counter, dice, mars).
+By default the entry becomes the Application Hub with **no apps built in**: you install every app afterwards as an `.f3x` file (src/device/f3x_install.py). `--hub A,B,C` builds the demo apps tennis, counter, dice, mars into
+the firmware as well; `--app NAME` makes the entry that one app and no hub (src/watch/README.md).
 It compiles src/watch/hub.c with the chosen apps (needs arm-none-eabi-gcc), draws the app-list icon (src/assets/mkicon.py, needs numpy), and builds the package with
 src/firmware/build_package.py (Bluetooth serial patches, the take-over of the window, the list label, the icon; every checksum repaired; the result is validated) and prints how much of the free flash it uses.
 Nothing of Samsung's or anybody else's is stored in this repository: you bring the stock package. Read docs/legal.md first, and keep the stock package at hand to flash back."""
@@ -16,8 +17,8 @@ import build_loader, gen, mkicon, build_package, fwd, kblang
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0]); ap.add_argument("stock"); ap.add_argument("out", nargs="?")
     g = ap.add_mutually_exclusive_group()
-    g.add_argument("--app", choices=sorted(gen.APPS), help="one app owns the window (default: tennis)")
-    g.add_argument("--hub", help="comma-separated apps, in the order of the list: the window becomes the Application Hub (e.g. tennis,counter,dice; \"none\" for a hub with installed apps only)")
+    g.add_argument("--app", choices=sorted(gen.APPS), help="single-app mode: that one app owns the window, no hub (default: the hub with no built-in apps)")
+    g.add_argument("--hub", help="comma-separated apps, in the order of the list: the window becomes the Application Hub (e.g. tennis,counter,dice). Default: no built-in apps (the same as \"none\"), every app is installed as .f3x")
     ap.add_argument("--no-native-transitions", action="store_true", help="a hub that opens an app inside its own window (no slide animation) instead of as a window of its own (the default; docs/details.md section 2)")
     ap.add_argument("--no-install", action="store_true", help="a hub without the loader of installable .f3x apps (saves about 1 kB; without the Bluetooth patches nothing can be installed anyway)")
     ap.add_argument("--label", help="name in the app list (replaces the entry's name; longer than 11 characters wraps onto two lines). Default: the app's name, or Application Hub")
@@ -35,7 +36,7 @@ def main():
     if not a.out: ap.error("out is required")
     p = fwd.Package.load(a.stock); raw = build_package.check_stock(p); en = next(build_package.lvlang.Lang(p.raw(k)) for k in p.paths() if k.endswith("/language_en.res"))
     sl = build_package.find_slot(build_package.slot_table(raw, en), a.slot)
-    hub = a.hub is not None; apps = ([x.strip() for x in a.hub.split(",")] if a.hub.strip() not in ("", "none") else []) if hub else [a.app or "tennis"]
+    hub = a.app is None; apps = [x.strip() for x in a.hub.split(",")] if hub and a.hub and a.hub.strip() != "none" else [] if hub else [a.app]
     install = hub and not a.no_install
     if install and a.no_bluetooth_patches: print("note: the hub can load installed apps, but without the Bluetooth patches nothing can be installed from the PC")
     kb_ttf = None; kb_langs = list(kblang.LANGS) if a.kb_lang.strip() == "all" else [x.strip() for x in a.kb_lang.split(",") if x.strip()]

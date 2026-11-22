@@ -3,7 +3,7 @@
 Python 3 (numpy for the icons, Pillow for some tools), `arm-none-eabi-gcc` for the code that runs on the watch. Run everything with `python3 -I`.
 
 **The one command you need most:** [`build_firmware.py`](build_firmware.py) compiles the code for the watch with the apps you choose and builds a firmware package from *your* stock package.
-It takes `--hub A,B,C` or `--hub none` (the Application Hub), `--app NAME` (one app), `--slot`, `--label`, `--languages`, `--no-install`, `--no-native-transitions`, `--no-bluetooth-patches`, `--reply-keyboard` with `--kb-lang` (the reply keyboard, [docs/replies.md](../docs/replies.md)), `--list-slots`,
+With no app options it builds the Application Hub with no apps built in (every app is installed later as `.f3x`); `--hub A,B,C` adds demo apps to the firmware, `--app NAME` makes one app own the window, `--slot`, `--label`, `--languages`, `--no-install`, `--no-native-transitions`, `--no-bluetooth-patches`, `--reply-keyboard` with `--kb-lang` (the reply keyboard, [docs/replies.md](../docs/replies.md)), `--list-slots`,
 and prints how much of the free flash it used. Steps: [docs/howto.md](../docs/howto.md).
 
 | Directory | What | Writes to the watch? |

@@ -13,14 +13,16 @@ Size is the installable file: header, code, relocation table and the 2,112-byte 
 
 ## Use them
 
-Each app can be **built into the firmware** or **installed later as a file**:
+The firmware's hub has no apps built in; you **install** each app as a file (no flashing). You can also build apps into the firmware if you prefer:
 
 ```sh
-# as a file, no flashing (needs the hub on the watch):
-python3 -I src/f3x/build_f3x.py src/watch/apps/dice.c dice.f3x --icon-kind dice
-python3 -I src/device/f3x_install.py install dice.f3x
+# as files, no flashing (needs the hub on the watch); the icon is the one named like the source:
+for a in tennis counter dice mars; do
+  python3 -I src/f3x/build_f3x.py src/watch/apps/$a.c $a.f3x
+  python3 -I src/device/f3x_install.py install $a.f3x
+done
 
-# or inside the firmware package (in the order given):
+# or, optionally, inside the firmware package (in the order given):
 python3 -I src/build_firmware.py stock-aza3.bin hub.bin --hub tennis,counter,dice,mars
 ```
 

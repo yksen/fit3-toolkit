@@ -16,9 +16,9 @@ If the version differs, do not flash: other versions are not supported (see [sta
 ## 1. Build a package
 
 ```
-python3 -I src/build_firmware.py stock-aza3.bin out.bin --hub none                          # Application Hub, no apps built in (install them later as .f3x)
-python3 -I src/build_firmware.py stock-aza3.bin out.bin --hub tennis,counter,dice,mars      # the hub with these apps built in (order = list order)
-python3 -I src/build_firmware.py stock-aza3.bin out.bin --app tennis                        # one app owns the entry, no hub (the default build)
+python3 -I src/build_firmware.py stock-aza3.bin out.bin                                    # the default: Application Hub, no apps built in (install every app later as .f3x)
+python3 -I src/build_firmware.py stock-aza3.bin out.bin --hub tennis,counter,dice,mars      # optional: the hub with these demo apps built in (order = list order)
+python3 -I src/build_firmware.py stock-aza3.bin out.bin --app tennis                        # optional: one app owns the entry, no hub
 ```
 
 Options: `--label "..."` (the name in the app list; more than 11 characters wraps onto two lines), `--slot` (see below), `--languages all` (rename the entry in every language file; untested outside English),
@@ -34,7 +34,7 @@ and Camera Remote are shown only when enabled in the phone app).
 ### The reply keyboard (optional)
 
 ```
-python3 -I src/build_firmware.py stock-aza3.bin out.bin --hub none --reply-keyboard --kb-lang pl,en
+python3 -I src/build_firmware.py stock-aza3.bin out.bin --reply-keyboard --kb-lang pl,en
 ```
 
 `--reply-keyboard` adds a *Write reply* row to the page of quick replies of a notification (the page the reply icon opens); it opens a QWERTY or T9 keyboard and sends the text to the phone as the reply.
@@ -83,7 +83,7 @@ Every package built here carries two one-instruction **Bluetooth patches** ([fir
 connectable (not visible in scans), and its file service accepts a connection without pairing from anyone in range**. It can read files and write `/user` files and a firmware package, and we saw no signature check on the firmware
 (only CRCs). Treat a watch with these patches as open to anyone near it.
 
-When you are finished, build the **final package without them** and flash it last: `python3 -I src/build_firmware.py stock-aza3.bin final.bin --hub none --no-bluetooth-patches`. The watch then behaves as from the
+When you are finished, build the **final package without them** and flash it last: `python3 -I src/build_firmware.py stock-aza3.bin final.bin --no-bluetooth-patches`. The watch then behaves as from the
 factory. The price: **to flash it again you need the serial service, which stock firmware offers only on the setup screen after a factory reset**, and nothing more can be installed from the PC. Apps already
 installed keep working. Flashing the genuine `stock-aza3.bin` also removes the patches (and our code). A package without the patches was built and validated but **has not been flashed**.
 

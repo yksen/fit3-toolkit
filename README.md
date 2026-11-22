@@ -48,7 +48,7 @@ adapter: the link uses Python's RFCOMM sockets and was **tried on Linux only** (
 **1. Build and flash the hub**
 
 ```sh
-python3 -I src/build_firmware.py stock-aza3.bin hub.bin --hub none
+python3 -I src/build_firmware.py stock-aza3.bin hub.bin                # the Application Hub, no apps built in
 export F3_ADDR=AA:BB:CC:DD:EE:FF                      # your watch's Bluetooth address
 python3 -I src/device/f3_flash.py hub.bin --upload --verify --start-update    # asks you to type FLASH
 ```
@@ -64,7 +64,7 @@ python3 -I src/device/f3x_install.py list
 **3. Reply keyboard** (optional; a firmware patch, rebuild the package with it)
 
 ```sh
-python3 -I src/build_firmware.py stock-aza3.bin hub.bin --hub none --reply-keyboard --kb-lang pl,en    # the layouts you want, or all; needs Roboto (fc-match) for the font
+python3 -I src/build_firmware.py stock-aza3.bin hub.bin --reply-keyboard --kb-lang pl,en    # the layouts you want, or all; needs Roboto (fc-match) for the font
 ```
 
 **4. Write your own** &nbsp;(start from the smallest complete app, [`counter.c`](src/watch/apps/counter.c); the guide is in [src/watch/apps](src/watch/apps/README.md))
