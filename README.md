@@ -33,7 +33,7 @@ PC over Bluetooth. Nothing of Samsung's is in this repository. The apps look and
 ## Features
 
 - **Application Hub**: one entry of the stock app list becomes a native-style list of your apps. Open one and it slides in like a stock app; swipe back to leave.
-- **Install apps without flashing**: `.f3x` files go to the watch over Bluetooth in about a second. A long press on an app's row removes it.
+- **Install apps without flashing**: `.f3x` files go to the watch over Bluetooth in about a second. A long press on an app's row opens a sheet: move it up or down in the list, or remove it.
 - **Reply keyboard** (a firmware patch, not an app): a *Write reply* row on the page of quick replies of a notification opens a keyboard, QWERTY or T9 multi-tap, with the letters of your language; the text goes to the phone as the reply. Layouts for 24 Latin-script languages, chosen at build time and followed from the watch's system language. [docs/replies.md](docs/replies.md)
 - **Demo apps** you can use or copy: *Tennis Score*, *Counter*, *Dice*, *Mars Production*. Each can be built into the firmware or installed later.
 - **Tools**: build and validate firmware packages, flash them, install apps, an emulator that runs the real firmware's functions on your PC, decoders for the watch's fonts and images.

@@ -78,11 +78,13 @@ def main():
     ev = lambda o, code: e.call(A["event_send"], o, code, 0)
     sheet = lambda: r.children(r.scr)[2] if len(r.children(r.scr)) > 2 else None
     tap = lambda o: (ev(o, PRESSED), r.click(o))                                  # a real touch always starts with PRESSED
-    ok("a long press on a bundled app does nothing", (ev(r.rows[0], PRESSED), ev(r.rows[0], LONG), sheet() is None)[2])
+    ev(r.rows[0], PRESSED); ev(r.rows[0], LONG); sh = sheet()
+    ok("a long press on a bundled app opens the sheet: name, position, Move up, Move down, Done (no Remove, no size)", sh is not None and r.alltext(sh) == ["Counter", "Position 1 of 3", "Move up", "Move down", "Done"], sh and r.alltext(sh))
+    r.click(r.children(sh)[-1]); ok("Done closes it", sheet() is None)
     ev(r.rows[1], PRESSED); ev(r.rows[1], LONG); sh = sheet()
-    ok("a long press on an installed app opens the sheet: question, name, size, two buttons", sh is not None and r.alltext(sh) == ["Remove app?", "Counter", "3.5 kB", "Remove", "Cancel"], sh and r.alltext(sh))
+    ok("a long press on an installed app opens the sheet: name, position, size, Move up, Move down, Remove, Done", sh is not None and r.alltext(sh) == ["Counter", "Position 2 of 3", "3.5 kB", "Move up", "Move down", "Remove", "Done"], sh and r.alltext(sh))
     r.click(r.rows[1]); ok("the release after the long press is not a tap: the app does not open", r.app_state() == 0 and len(r.children(r.scr)) == 3)
-    r.click(r.children(sh)[-1]); ok("Cancel closes the sheet and removes nothing", sheet() is None and r.files[HUB % 0] == counter and len(r.rows) == 3)
+    r.click(r.children(sh)[-1]); ok("Done closes the sheet and removes nothing", sheet() is None and r.files[HUB % 0] == counter and len(r.rows) == 3)
     ev(r.rows[1], PRESSED); ev(r.rows[1], LONG); r.calls.clear(); r.gesture(2)
     ok("the back gesture closes the sheet first (the hub is not left)", sheet() is None and not any(c[0] == "wm_open" for c in r.calls), r.calls)
     tap(r.rows[1]); ok("a plain tap after that still opens the app", r.app_state() != 0); r.gesture(2)
@@ -96,6 +98,42 @@ def main():
     ev(r.rows[1], PRESSED); ev(r.rows[1], LONG); sh = sheet(); r.click(r.children(sh)[-2]); r.click(r.children(sh)[-2]); r.rows = r.children(r.list)
     ok("removing the last installed app leaves the bundled one", [r.alltext(x) for x in r.rows] == [["Counter"]])
     e.call(A["obj_del"], scr)
+    e.call(A["obj_del"], scr)
+    # ---- the order of the list: Move up / Move down in the sheet, saved to /user/hub.ord when the sheet closes ----
+    ORD = "/user/hub.ord"; names = lambda: [r.alltext(x)[0] for x in r.children(r.list)]
+    btn = lambda sh, t: [k for k in r.children(sh) if r.alltext(k) == [t]][0]
+    def press(i): rows = r.children(r.list); ev(rows[i], PRESSED); ev(rows[i], LONG); return sheet()
+    def order_file(keys): return struct.pack("<I", 0x3144524f) + bytes(keys) + b"\xff" * (28 - len(keys))
+    r = Rig(); e = r.e; r.files[HUB % 2] = dice; r.files[HUB % 7] = counter; scr = r.create()
+    ok("the default order is the bundled app, then the slots", names() == ["Counter", "Dice", "Counter"] and ORD not in r.files, names())
+    sh = press(0); r.click(btn(sh, "Move down")); sh = sheet()
+    ok("Move down swaps the row with the next, in place; the sheet stays and shows the new position", names() == ["Dice", "Counter", "Counter"] and "Position 2 of 3" in r.alltext(sh), (names(), r.alltext(sh)))
+    ok("... and nothing is written yet (one write when the sheet closes, not one per tap)", ORD not in r.files and ("motor", 1, 1) in r.calls)
+    r.click(btn(sh, "Move down")); ok("a second Move down continues with the same app", names() == ["Dice", "Counter", "Counter"] and "Position 3 of 3" in r.alltext(sh), (names(), r.alltext(sh)))
+    r.click(btn(sh, "Move down")); ok("Move down at the end does nothing", "Position 3 of 3" in r.alltext(sh) and names() == ["Dice", "Counter", "Counter"])
+    nw = len(r.writes); r.click(btn(sh, "Done"))
+    ok("Done writes the 32-byte order file once: keys in the order shown (Dice slot 2, installed Counter slot 7, bundled Counter)", sheet() is None and len(r.writes) == nw + 1 and r.files[ORD] == order_file([0x22, 0x27, 0]), r.files.get(ORD))
+    e.call(A["obj_del"], scr); scr = r.create()
+    ok("the order survives leaving and entering the hub", names() == ["Dice", "Counter", "Counter"])
+    rows = r.children(r.list); tap(rows[0]); ok("an app opens by its entry, not by its row number (Dice, installed, is first now)", r.app_state() != 0 and "Dice" in r.alltext(r.root())); r.gesture(2)
+    rows = r.children(r.list); tap(rows[2]); ok("... the bundled Counter, now last, opens too", r.app_state() != 0 and "Counter" in r.alltext(r.root())); r.gesture(2)
+    sh = press(0); nw = len(r.writes); r.click(btn(sh, "Move up")); ok("Move up on the first row does nothing", names() == ["Dice", "Counter", "Counter"] and "Position 1 of 3" in r.alltext(sh))
+    r.click(btn(sh, "Move down")); r.click(btn(sh, "Move up")); r.gesture(2)
+    ok("the back gesture closes the sheet and saves (the net order is as before, one write)", sheet() is None and len(r.writes) == nw + 1 and r.files[ORD] == order_file([0x22, 0x27, 0]), len(r.writes) - nw)
+    # entries the file does not know: a new app goes last, a key of an app that is gone is skipped
+    r.files[HUB % 1] = dice; r.files[ORD] = order_file([0x25, 0x27, 0x22, 0]); e.call(A["obj_del"], scr); scr = r.create()
+    ok("a new app (slot 1) goes to the end; an unknown key (0x25) is skipped", names() == ["Counter", "Dice", "Counter", "Dice"] and r.alltext(r.children(r.list)[0]) == ["Counter"], names())
+    for bad in (b"junk", order_file([0x22, 0x27, 0])[:20], b"\x00" * 32):
+        r.files[ORD] = bad; e.call(A["obj_del"], scr); scr = r.create()
+        ok("a damaged order file is ignored (default order)", names() == ["Counter", "Dice", "Dice", "Counter"], (bad, names()))
+    # Remove after a move in the same sheet; the window deleted with the sheet open saves
+    r.files.pop(ORD, None); e.call(A["obj_del"], scr); scr = r.create()
+    ok("default order again after the file is gone", names() == ["Counter", "Dice", "Dice", "Counter"], names())
+    sh = press(1); rm = btn(sh, "Remove"); r.click(btn(sh, "Move up")); r.click(rm); r.click(rm)
+    ok("Remove after a move: slot 1 holds the tombstone, the list is rebuilt without it, the other apps keep their order",
+       r.files[HUB % 1] == b"F3X-GONE" and sheet() is None and names() == ["Counter", "Dice", "Counter"] and r.files[HUB % 2] == dice, (names(), r.files.get(ORD)))
+    nw = len(r.writes); sh = press(0); r.click(btn(sh, "Move down")); e.call(A["obj_del"], scr)
+    ok("deleting the window with the sheet open and an unsaved move saves the order", len(r.writes) == nw + 1 and r.files[ORD][:4] == b"ORD1", len(r.writes) - nw)
     # an empty hub says so, and says so again after the last removal
     r = Rig2(); e = r.e; scr = r.create(); ok("an empty hub shows a hint instead of an empty list", r.alltext(r.list) == ["No apps yet", "Add apps from a PC"], r.alltext(r.list))
     e.call(A["obj_del"], scr); r.files[HUB % 5] = counter; scr = r.create(); rows = r.children(r.list); ok("one installed app: one row, no hint", [r.alltext(x) for x in rows] == [["Counter"]])

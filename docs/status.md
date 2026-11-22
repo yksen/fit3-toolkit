@@ -16,6 +16,7 @@ Writing your own reply to a notification ([replies.md](replies.md)): **works on 
 | Tennis Score (games, sets, tie-break, serve, 16-step undo, stats, save and restore, wake from screen-off), Counter, Dice, Mars Production | watch (tennis since 2026-10-31); the saved match restored after a restart: emulator only |
 | `.f3x` apps: build, install over Bluetooth (eight, each read back identical), the hub creates `/user/hub`, opens the files, loads them into the heap and runs them; repeated open and close | watch |
 | Removing an installed app: long press, sheet, two-step Remove, list rebuilt | watch |
+| Reordering the list: long press, Move up / Move down, order kept in `/user/hub.ord` across hub visits, new apps last, damaged file ignored | watch |
 | `f3x_install.py remove` and `--force`, an update in place, a damaged file refused by the hub, an image near the 32 kB limit | PC and emulator; **open** on a watch |
 | Hub built with `--no-native-transitions` (apps inside the hub's window) | emulator |
 

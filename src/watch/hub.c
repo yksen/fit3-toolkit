@@ -18,10 +18,14 @@
 #define MAX_ROWS 28                                              /* bundled apps (at most 12) and installed ones (F3X_SLOTS) */
 #define ROW_H 90                                                 /* the stock app list: rows 254 x 90, radius 26, 10 px apart, the first 6 px from the top; icon 64 x 64 at x 12; name 8 px right of it, 152 wide */
 #define ROW_GAP 10
+#define ORDER_PATH "/user/hub.ord"                               /* the order of the list, one 32-byte file (a directory is not needed: bundled-only builds have no /user/hub) */
+#define ORD_MAGIC 0x3144524fu                                    /* "ORD1" */
+#define KEY_INST 0x20                                            /* the key of a list entry: the index of a bundled app, or KEY_INST + the slot of an installed one */
+typedef struct Inst Inst;
 
 #ifdef F3X_LOADER
 /* ---- installed apps: /user/hub/aNN.f3x (docs/f3x.md) ---- */
-typedef struct { Icon icon; char name[24]; u8 slot, pad[3]; u32 size; u8 data[F3X_ICON_SIZE]; } Inst;      /* what the list needs of an installed app: its name and icon (the code is loaded when it is opened) */
+struct Inst { Icon icon; char name[24]; u8 slot, pad[3]; u32 size; u8 data[F3X_ICON_SIZE]; };      /* what the list needs of an installed app: its name and icon (the code is loaded when it is opened) */
 #define HUB_DIR "/user/hub"
 #define MAX_IMAGE 0x8000u
 #define MAX_RELOC 0x2000u
@@ -66,17 +70,18 @@ fail:
 }
 #endif
 
+typedef struct { u8 key; Inst *in; } Ent;                      /* one entry of the list: its key, and the installed app (0 for a bundled one) */
+typedef struct { u32 magic; u8 key[MAX_ROWS]; } OrderFile;      /* the keys in the order shown, 0xff after the last */
+
 typedef struct {
     lv_obj_t *scr, *list, *root;                                 /* the screen, the list of apps (hub mode), the open app's container (the screen itself in single mode) */
     const App *cur; void *st;                                    /* the open app and its state (offset 16: src/emu tests read it) */
     void *blk;                                                   /* the loaded image of an installed app that is open */
     u8 busy;                                                     /* a push to the app window has been asked for: ignore more taps */
-    lv_obj_t *row[MAX_ROWS];
-#ifdef F3X_LOADER
-    Inst *inst[F3X_SLOTS]; int ninst;
-    lv_obj_t *sheet, *b_rm, *l_rm, *b_cancel;                    /* the "Remove app?" sheet of a long press, and its buttons */
-    int sel; u8 armed, lp;                                       /* the installed row it is about (index in row[]), "Sure?" shown, a long press was sent (the release must not open the app) */
-#endif
+    lv_obj_t *row[MAX_ROWS];                                     /* row[i] shows ent[i] */
+    Ent ent[MAX_ROWS]; int nent;                                 /* the list, in the order shown */
+    lv_obj_t *sheet, *b_up, *b_dn, *b_rm, *l_rm, *b_done, *l_pos; /* the sheet of a long press (move, remove), and its buttons */
+    int sel; u8 armed, lp, dirty;                                /* the entry it is about (index in ent[]), "Sure?" shown, a long press was sent (the release must not open the app), the order changed and is not saved yet */
 } Win;
 
 #define IN_CONTAINER (HUB_MODE && !HOST_MODE)                    /* an app lives in a container of the hub's window (no window of its own, no slide) */
@@ -94,63 +99,124 @@ static void close_app(Win *w) {
     w->cur = 0; w->st = 0; w->root = 0; free_blk(w);             /* an installed app's code is freed only after its destroy has returned */
 }
 static void build_list(Win *w);
+/* ---- the order of the list: ORDER_PATH holds the keys in the order the user left them; entries it does not know (new apps) follow in the default order, keys it has no entry for are ignored ---- */
+static void order_apply(Ent *e, int n) {
+    OrderFile f; Ent t[MAX_ROWS]; u8 used[MAX_ROWS]; int m = 0;
+    if (!blob_load(ORDER_PATH, &f, sizeof f) || f.magic != ORD_MAGIC) return;
+    fill8(used, 0, sizeof used);
+    for (int k = 0; k < MAX_ROWS && f.key[k] != 0xff; k++)
+        for (int i = 0; i < n; i++) if (!used[i] && e[i].key == f.key[k]) { used[i] = 1; t[m++] = e[i]; break; }
+    for (int i = 0; i < n; i++) if (!used[i]) t[m++] = e[i];
+    mcopy(e, t, (u32)n * sizeof(Ent));
+}
+static void order_save(Win *w) {
+    OrderFile f; f.magic = ORD_MAGIC; fill8(f.key, 0xff, sizeof f.key);
+    for (int i = 0; i < w->nent; i++) f.key[i] = w->ent[i].key;
+    blob_save(ORDER_PATH, &f, sizeof f); w->dirty = 0;
+}
+static const char *ent_name(const Ent *e) {
 #ifdef F3X_LOADER
-/* ---- removing an installed app: a long press on its row opens a sheet; "Remove" asks twice ("Sure?"), then the slot is overwritten with the tombstone the hub ignores ---- */
-static void close_sheet(Win *w) { if (w->sheet) { lv_obj_del(w->sheet); w->sheet = 0; } w->armed = 0; }
+    if (e->in) return e->in->name;
+#endif
+    return APPS[e->key]->name;
+}
+static const Icon *ent_icon(const Ent *e) {
+#ifdef F3X_LOADER
+    if (e->in) return &e->in->icon;
+#endif
+    return APPS[e->key]->icon;
+}
+
+/* ---- the sheet of a long press on a row: Move up, Move down, and for an installed app Remove (asks twice: "Sure?"; the slot is then overwritten with the tombstone the hub ignores).
+ * The new order is written once, when the sheet is closed. ---- */
+static void close_sheet(Win *w) {
+    if (w->sheet) { lv_obj_del(w->sheet); w->sheet = 0; }
+    w->armed = 0;
+    if (w->dirty) order_save(w);
+}
+static void sheet_update(Win *w) {
+    char b[TXT_MAX], *p = put(b, "Position "); p = putn(p, (u32)w->sel + 1, 1); p = put(p, " of "); putn(p, (u32)w->nent, 1);
+    lv_label_set_text(w->l_pos, b);
+    set_bg_color(w->b_up, w->sel > 0 ? C_BTN : C_BTN_OFF);
+    set_bg_color(w->b_dn, w->sel < w->nent - 1 ? C_BTN : C_BTN_OFF);
+}
+static void build_rows(Win *w, int scroll_to_sel);
+static void move_sel(Win *w, int d) {
+    int a = w->sel, b = a + d; if (b < 0 || b >= w->nent) return;
+    Ent t = w->ent[a]; w->ent[a] = w->ent[b]; w->ent[b] = t;
+    w->sel = b; w->dirty = 1; w->armed = 0;
+    if (w->l_rm) { lv_label_set_text(w->l_rm, "Remove"); set_bg_color(w->b_rm, C_BTN); }
+    build_rows(w, 1); sheet_update(w); motor_once(1, 1);
+}
 static void on_sheet(lv_event_t *e) {
     Win *w = (Win *)lv_event_get_user_data(e); lv_obj_t *t = lv_event_get_target(e);
     if (lv_event_get_code(e) != EV_CLICKED || !w->sheet) return;
-    if (t == w->b_rm) {
+    if (t == w->b_up) move_sel(w, -1);
+    else if (t == w->b_dn) move_sel(w, 1);
+    else if (t == w->b_done) { motor_once(1, 1); close_sheet(w); }
+#ifdef F3X_LOADER
+    else if (w->b_rm && t == w->b_rm) {
         if (!w->armed) { w->armed = 1; lv_label_set_text(w->l_rm, "Sure?"); set_bg_color(w->b_rm, C_WARN); motor_once(1, 1); return; }
-        char path[32]; slot_path(path, w->inst[w->sel - (int)NAPPS]->slot); blob_save(path, "F3X-GONE", 8);
-        motor_once(4, 1); close_sheet(w); build_list(w);
-    } else if (t == w->b_cancel) { motor_once(1, 1); close_sheet(w); }
+        char path[32]; slot_path(path, w->ent[w->sel].in->slot); blob_save(path, "F3X-GONE", 8);
+        motor_once(4, 1); close_sheet(w); build_list(w);         /* close_sheet saves the moves made in this sheet; the rebuilt list reads them from the file */
+    }
+#endif
 }
 static void open_sheet(Win *w, int idx) {
-    const Inst *in = w->inst[idx - (int)NAPPS]; char b[TXT_MAX], *p;
-    w->sel = idx; w->armed = 0;
+    const Ent *en = &w->ent[idx]; int inst = en->key >= KEY_INST; (void)inst;
+    w->sel = idx; w->armed = 0; w->b_rm = 0; w->l_rm = 0;
     lv_obj_t *s = w->sheet = mk_root(w->scr);
-    mk_text(s, 0, 40, SCREEN_W, FT_NAME, C_WHITE, ALIGN_CENTER, "Remove app?");
-    mk_text(s, 14, 120, 228, FT_BTN, C_WHITE, ALIGN_CENTER, in->name);
-    u32 t = (in->size * 10u + 512u) / 1024u; p = putn(b, t / 10u, 1); p = put(p, "."); p = putn(p, t % 10u, 1); put(p, " kB");
-    mk_text(s, 0, 236, SCREEN_W, FT_SMALL, C_MUTED, ALIGN_CENTER, b);
-    w->b_rm = mk_pill(s, 6, 344, 118, "Remove", &w->l_rm, on_sheet, w);
-    w->b_cancel = mk_pill(s, 132, 344, 118, "Cancel", 0, on_sheet, w);
-    motor_once(4, 1);
-}
+    mk_text(s, 14, 16, 228, FT_BTN, C_WHITE, ALIGN_CENTER, ent_name(en));
+    w->l_pos = mk_text(s, 0, 96, SCREEN_W, FT_SMALL, C_MUTED, ALIGN_CENTER, "");
+#ifdef F3X_LOADER
+    if (inst) {
+        char b[TXT_MAX], *p; u32 t = (en->in->size * 10u + 512u) / 1024u;
+        p = putn(b, t / 10u, 1); p = put(p, "."); p = putn(p, t % 10u, 1); put(p, " kB");
+        mk_text(s, 0, 122, SCREEN_W, FT_SMALL, C_MUTED, ALIGN_CENTER, b);
+    }
 #endif
+    w->b_up = mk_pill(s, 6, 150, 244, "Move up", 0, on_sheet, w);
+    w->b_dn = mk_pill(s, 6, 210, 244, "Move down", 0, on_sheet, w);
+#ifdef F3X_LOADER
+    if (inst) w->b_rm = mk_pill(s, 6, 270, 244, "Remove", &w->l_rm, on_sheet, w);
+#endif
+    w->b_done = mk_pill(s, 6, 340, 244, "Done", 0, on_sheet, w);
+    sheet_update(w); motor_once(4, 1);
+}
 
 static void on_row(lv_event_t *e) {
     Win *w = (Win *)lv_event_get_user_data(e); lv_obj_t *t = lv_event_get_target(e); u32 code = lv_event_get_code(e);
-#ifdef F3X_LOADER
     if (code == EV_PRESSED) w->lp = 0;
     if (code == EV_LONG_PRESSED && !w->cur && !w->sheet) {
-        for (int i = (int)NAPPS; i < MAX_ROWS; i++) if (w->row[i] && t == w->row[i]) { w->lp = 1; open_sheet(w, i); return; }
-        return;                                                  /* a bundled app cannot be removed: nothing happens */
+        for (int i = 0; i < w->nent; i++) if (w->row[i] && t == w->row[i]) { w->lp = 1; open_sheet(w, i); return; }
+        return;
     }
     if (code == EV_CLICKED && w->lp) { w->lp = 0; return; }      /* the release after a long press is not a tap */
     if (w->sheet) return;
-#endif
     if (code != EV_CLICKED || w->cur) return;
-    for (int i = 0; i < MAX_ROWS; i++) if (w->row[i] && t == w->row[i]) {
+    for (int i = 0; i < w->nent; i++) if (w->row[i] && t == w->row[i]) {
         motor_once(1, 1);
+        const Ent *en = &w->ent[i];
 #if HOST_MODE
         if (w->busy) return;
         w->busy = 1;                                             /* the manager creates the app's window (host_create) and slides it in; this window is deleted when it is left */
-        int arg = i;
+        int arg = en->key;
 #ifdef F3X_LOADER
-        if (i >= (int)NAPPS) arg = 0x100 + w->inst[i - (int)NAPPS]->slot;
+        if (en->in) arg = 0x100 + en->in->slot;
 #endif
         wm_open(2, HOST_ID, arg, 0xf);
         return;
 #else
-        if (i < (int)NAPPS) { open_app(w, APPS[i]); return; }
 #ifdef F3X_LOADER
-        const App *a; void *blk = inst_load(w->inst[i - NAPPS]->slot, &a);
-        if (!blk) { motor_once(4, 1); return; }                  /* damaged or incompatible file: a strong buzz, nothing opens */
-        open_app(w, a);
-        if (w->cur) w->blk = blk; else app_free(blk);
+        if (en->in) {
+            const App *a; void *blk = inst_load(en->in->slot, &a);
+            if (!blk) { motor_once(4, 1); return; }              /* damaged or incompatible file: a strong buzz, nothing opens */
+            open_app(w, a);
+            if (w->cur) w->blk = blk; else app_free(blk);
+            return;
+        }
 #endif
+        open_app(w, APPS[en->key]);
         return;
 #endif
     }
@@ -160,15 +226,14 @@ static void on_screen(lv_event_t *e) {
     if (code == EV_DELETE) {
         if (w->cur) w->cur->destroy(w->st);
         free_blk(w);
+        if (w->dirty) order_save(w);                             /* the window left with the sheet still open */
 #ifdef F3X_LOADER
-        for (int i = 0; i < w->ninst; i++) app_free(w->inst[i]);
+        for (int i = 0; i < w->nent; i++) if (w->ent[i].in) app_free(w->ent[i].in);
 #endif
         app_free(w); return;
     }
     if (code == EV_GESTURE && lv_indev_get_gesture_dir(lv_indev_get_act()) == 2) {
-#ifdef F3X_LOADER
         if (w->sheet) { close_sheet(w); ui_gesture_consume(); return; }       /* the sheet takes the back gesture first */
-#endif
         if (w->cur && w->cur->back(w->st)) { }                   /* the app used the gesture */
         else if (IN_CONTAINER && w->cur) close_app(w);
         else wm_open(3, -1, 0, BACK_ANIM);
@@ -183,27 +248,40 @@ static void add_row(Win *w, int i, const char *name, const Icon *icon) {
     lv_obj_update_layout(nm); lv_obj_align_to(nm, im, ALIGN_OUT_RIGHT_MID, 8, 0);
 }
 
-/* (re)builds the rows: the bundled apps, then the installed ones in slot order; with no row at all a hint */
-static void build_list(Win *w) {
-    lv_obj_t *l = w->list; int n = 0;
+/* (re)builds the rows from ent[]; with no entry at all a hint. After a move the list is scrolled to keep the moved row in view, otherwise to the top */
+static void build_rows(Win *w, int scroll_to_sel) {
+    lv_obj_t *l = w->list; int y = 0;
     lv_obj_clean(l);
     fill8(w->row, 0, sizeof w->row);
+    for (int i = 0; i < w->nent; i++) add_row(w, i, ent_name(&w->ent[i]), ent_icon(&w->ent[i]));
 #ifdef F3X_LOADER
-    for (int i = 0; i < w->ninst; i++) app_free(w->inst[i]);
-    w->ninst = 0;
-#endif
-    for (int i = 0; i < (int)NAPPS && i < 12; i++, n++) add_row(w, i, APPS[i]->name, APPS[i]->icon);
-#ifdef F3X_LOADER
-    for (int slot = 0; slot < F3X_SLOTS && n < MAX_ROWS; slot++) {
-        Inst *in = inst_scan(slot); if (!in) continue;
-        w->inst[w->ninst++] = in; add_row(w, n++, in->name, &in->icon);
-    }
-    if (!n) {
+    if (!w->nent) {
         mk_text(l, 0, 90, SCREEN_W, FT_NAME, C_WHITE, ALIGN_CENTER, "No apps yet");
         mk_text(l, 14, 140, 228, FT_SMALL, C_MUTED, ALIGN_CENTER, "Add apps from a PC");
     }
 #endif
-    lv_obj_scroll_to_y(l, 0, 0);
+    if (scroll_to_sel) {                                         /* the row centred, within the scrollable range (scroll_to does not clamp) */
+        int content = 6 + w->nent * (ROW_H + ROW_GAP), view = SCREEN_H - 50, max = content > view ? content - view : 0;
+        y = 6 + w->sel * (ROW_H + ROW_GAP) - (view - ROW_H) / 2; if (y > max) y = max; if (y < 0) y = 0;
+    }
+    lv_obj_scroll_to_y(l, y, 0);
+}
+
+/* (re)reads the apps: the bundled ones, then the installed ones in slot order, then the saved order is applied */
+static void build_list(Win *w) {
+#ifdef F3X_LOADER
+    for (int i = 0; i < w->nent; i++) if (w->ent[i].in) app_free(w->ent[i].in);
+#endif
+    w->nent = 0;
+    for (int i = 0; i < (int)NAPPS && i < 12; i++) { w->ent[w->nent].key = (u8)i; w->ent[w->nent].in = 0; w->nent++; }
+#ifdef F3X_LOADER
+    for (int slot = 0; slot < F3X_SLOTS && w->nent < MAX_ROWS; slot++) {
+        Inst *in = inst_scan(slot); if (!in) continue;
+        w->ent[w->nent].key = (u8)(KEY_INST + slot); w->ent[w->nent].in = in; w->nent++;
+    }
+#endif
+    order_apply(w->ent, w->nent);
+    build_rows(w, 0);
 }
 
 #if HOST_MODE

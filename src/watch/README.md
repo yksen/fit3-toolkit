@@ -20,7 +20,9 @@ All firmware addresses used are in `docs/symbols.csv`.
 
 By default (`--hub`) every app is a window of its own, id `0x10`: the hub asks the window manager for `wm_open(2, 0x10, arg, 0xf)` and the manager slides the app in like a stock one (details: docs/details.md,
 section 2). `--no-native-transitions` builds the fallback: the app is a container inside the hub's window, without the slide. In both modes the back gesture goes to the app first (an overlay may close), then
-the app closes. A long press on the row of an **installed** app opens a sheet that removes it (Remove asks twice; the slot is overwritten with the 8-byte tombstone `F3X-GONE`).
+the app closes. A long press on any row opens a sheet with **Move up** and **Move down** (the sheet stays open, so you can keep moving; the new order is written once, to `/user/hub.ord`, when the sheet closes) and, for an **installed** app,
+**Remove** (it asks twice; the slot is overwritten with the 8-byte tombstone `F3X-GONE`). The default order is the bundled apps in the order of `--hub`, then the installed ones by slot. The order file is 32 bytes: `ORD1` and one key
+per entry (the index of a bundled app, or `0x20` + the slot of an installed one), `0xff` after the last. Entries the file does not name (a newly installed app) go to the end; keys of apps that are gone, and a damaged file, are ignored.
 
 ## Build modes
 

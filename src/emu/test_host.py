@@ -77,5 +77,14 @@ def main():
     hs = r.manager_open(7); ok("a bundled index out of range (7) gives the same screen", r.alltext(hs) == ["Cannot open this app"]); e.call(A["obj_del"], hs)
     # ---- the hub window in this mode
     r.use(*hub); r.calls.clear(); r.gesture(2); ok("the back gesture on the list leaves the hub (wm_open 3, -1, 0, 0x14)", ("wm_open", 3, 0xffffffff, 0, BACK) in r.calls, r.calls)
+    # ---- reordering: the argument comes from the entry the row shows, not from the row number
+    r.use(*hub); e.w32(0x200fb4e4 + WIN * 0x30 + 0x10, hub[0]); e.call(0x2c1ecd68, 0, 0, 0)
+    ev = lambda o, code: e.call(A["event_send"], o, code, 0); sheet = lambda: r.children(hub[0])[2] if len(r.children(hub[0])) > 2 else None
+    btn = lambda sh, t: [k for k in r.children(sh) if r.alltext(k) == [t]][0]
+    rows = r.children(r.children(hub[0])[1]); ev(rows[0], 1); ev(rows[0], 5); sh = sheet(); r.click(btn(sh, "Move down")); r.click(btn(sh, "Done"))
+    rows = r.children(r.children(hub[0])[1]); r.calls.clear(); ev(rows[0], 1); r.click(rows[0]); wo = [c for c in r.calls if c[0] == "wm_open"]
+    ok("after Move down on the first row, the first row opens the app that was second (argument 1)", wo == [("wm_open", 2, 0x10, 1, 0xf)] and r.alltext(rows[0]) == ["Dice"], (wo, r.alltext(rows[0])))
+    e.call(0x2c1ecd68, 0, 0, 0); r.calls.clear(); ev(rows[1], 1); r.click(rows[1]); wo = [c for c in r.calls if c[0] == "wm_open"]
+    ok("... and the second row opens the one that was first (argument 0)", wo == [("wm_open", 2, 0x10, 0, 0xf)] and r.alltext(rows[1]) == ["Counter"], (wo, r.alltext(rows[1])))
     print("%d/%d passed" % (sum(res), len(res))); return 0 if all(res) else 1
 sys.exit(main())

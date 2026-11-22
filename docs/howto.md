@@ -68,7 +68,7 @@ Open the hub once after flashing (it creates `/user/hub`), then:
 python3 -I src/f3x/build_f3x.py src/watch/apps/dice.c dice.f3x --icon-kind dice      # build an app as a file (or your own .c file)
 python3 -I src/device/f3x_install.py list                                            # the sixteen slots, read only
 python3 -I src/device/f3x_install.py install dice.f3x                                # first free slot; the same name updates in place
-python3 -I src/device/f3x_install.py remove --slot 3                                 # or: long press the app's row in the hub
+python3 -I src/device/f3x_install.py remove --slot 3                                 # or: long press the app's row in the hub (there you can also move it in the list)
 ```
 
 The format, how to write an app and the limits: [f3x.md](f3x.md).
